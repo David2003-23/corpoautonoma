@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#7fb89a" />
+  <meta name="description" content="Registro de productos, consultas e inventario por código de barras" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Inventario" />
+  <title>Inventario</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icons/icon.svg" alt="" width="32" height="32" />
+      <h1 id="viewTitle">Registrar producto</h1>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ REGISTRAR / EDITAR ============ -->
+    <section id="view-registrar" class="view active" aria-labelledby="viewTitle">
+      <form id="productForm" class="card" autocomplete="off" novalidate>
+        <input type="hidden" id="editingId" />
+        <div id="editBanner" class="banner" hidden>
+          Editando producto
+          <button type="button" class="link" id="cancelEdit">Cancelar</button>
+        </div>
+
+        <label class="field">
+          <span>Código de barras</span>
+          <div class="input-row">
+            <input id="fBarcode" inputmode="numeric" placeholder="Escanea o escribe el código" required />
+            <button type="button" class="icon-btn" data-scan="fBarcode" aria-label="Escanear código">
+              <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
+            </button>
+          </div>
+        </label>
+
+        <label class="field">
+          <span>Nombre del producto</span>
+          <input id="fName" placeholder="Ej: Arroz Diana 500 g" required />
+        </label>
+
+        <div class="grid-2">
+          <label class="field">
+            <span>Valor de costo</span>
+            <input id="fCost" class="money" inputmode="numeric" placeholder="$ 0" required />
+          </label>
+          <label class="field">
+            <span>Valor de venta</span>
+            <input id="fPrice" class="money" inputmode="numeric" placeholder="$ 0" required />
+          </label>
+        </div>
+        <p class="hint" id="marginHint"></p>
+
+        <div class="field">
+          <span>Foto del producto</span>
+          <label class="photo-drop" id="photoDrop">
+            <input id="fPhoto" type="file" accept="image/*" capture="environment" hidden />
+            <img id="photoPreview" alt="Vista previa" hidden />
+            <span class="photo-empty" id="photoEmpty">
+              <svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              Tomar foto
+            </span>
+          </label>
+          <button type="button" class="link" id="removePhoto" hidden>Quitar foto</button>
+        </div>
+
+        <button type="submit" class="btn primary block" id="saveBtn">Guardar producto</button>
+      </form>
+    </section>
+
+    <!-- ============ CONSULTAR ============ -->
+    <section id="view-consultar" class="view">
+      <div class="card">
+        <div class="input-row">
+          <input id="qBarcode" inputmode="numeric" placeholder="Código de barras" />
+          <button type="button" class="icon-btn" data-scan="qBarcode" aria-label="Escanear código">
+            <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
+          </button>
+        </div>
+        <button class="btn primary block" id="scanQuery">Escanear para consultar</button>
+      </div>
+      <div id="queryResult"></div>
+
+      <h2 class="section-title">Productos registrados <span id="productCount" class="pill">0</span></h2>
+      <input id="searchList" class="search" placeholder="Buscar por nombre o código" />
+      <ul id="productList" class="product-list"></ul>
+    </section>
+
+    <!-- ============ INVENTARIO ============ -->
+    <section id="view-inventario" class="view">
+      <div class="card">
+        <div class="input-row">
+          <input id="iBarcode" inputmode="numeric" placeholder="Código de barras" />
+          <button type="button" class="icon-btn" data-scan="iBarcode" aria-label="Escanear código">
+            <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8"/></svg>
+          </button>
+        </div>
+        <button class="btn primary block" id="scanInventory">Escanear producto</button>
+
+        <div id="invCurrent" class="inv-current" hidden>
+          <div class="inv-current-head">
+            <strong id="invName"></strong>
+            <span class="muted" id="invCode"></span>
+          </div>
+          <div class="grid-3">
+            <label class="field">
+              <span>Costo</span>
+              <input id="invCost" readonly tabindex="-1" />
+            </label>
+            <label class="field">
+              <span>Cantidad</span>
+              <input id="invQty" inputmode="decimal" placeholder="0" />
+            </label>
+            <label class="field">
+              <span>Total</span>
+              <input id="invTotal" readonly tabindex="-1" class="strong" />
+            </label>
+          </div>
+          <button class="btn primary block" id="invAdd">Agregar al inventario</button>
+        </div>
+      </div>
+
+      <div class="grand-total">
+        <div>
+          <span class="muted">Total del inventario</span>
+          <strong id="grandTotal">$ 0</strong>
+        </div>
+        <div class="right">
+          <span class="muted"><span id="invItems">0</span> productos</span>
+          <span class="muted"><span id="invUnits">0</span> unidades</span>
+        </div>
+      </div>
+
+      <ul id="invList" class="inv-list"></ul>
+
+      <div class="actions">
+        <button class="btn danger-soft" id="invClear">Limpiar todo</button>
+        <button class="btn primary" id="invPdf">Descargar PDF</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Secciones">
+    <button class="tab active" data-view="registrar">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      Registrar
+    </button>
+    <button class="tab" data-view="consultar">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+      Consultar
+    </button>
+    <button class="tab" data-view="inventario">
+      <svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/></svg>
+      Inventario
+    </button>
+  </nav>
+
+  <!-- Escáner -->
+  <div id="scanner" class="sheet" hidden role="dialog" aria-modal="true" aria-label="Escáner">
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <strong>Apunta al código de barras</strong>
+        <button class="icon-btn ghost" id="closeScanner" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div id="reader"></div>
+      <p class="hint center" id="scanMsg">Iniciando cámara…</p>
+    </div>
+  </div>
+
+  <!-- Confirmación -->
+  <div id="confirm" class="sheet" hidden role="alertdialog" aria-modal="true">
+    <div class="sheet-body small">
+      <p id="confirmText"></p>
+      <div class="actions">
+        <button class="btn ghost" id="confirmNo">Cancelar</button>
+        <button class="btn danger" id="confirmYes">Sí, continuar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Foto ampliada -->
+  <div id="photoView" class="sheet" hidden>
+    <img id="photoBig" alt="Foto del producto" />
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="vendor/html5-qrcode.min.js" defer></script>
+  <script src="vendor/jspdf.umd.min.js" defer></script>
+  <script src="vendor/jspdf.plugin.autotable.min.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

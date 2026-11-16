@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // App de inventario (PWA estática en public/inventario)
+  async redirects() {
+    return [
+      { source: "/inventario", destination: "/inventario/index.html", permanent: false },
+    ];
+  },
   images: {
     remotePatterns: [
       {
