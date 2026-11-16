@@ -617,6 +617,12 @@
 
     const pad = (n) => String(n).padStart(2, "0");
     const fileName = `inventario-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.pdf`;
+    if (window.AndroidApp?.savePdf) {
+      // App Android: el código nativo guarda el PDF en Descargas y lo abre
+      const b64 = doc.output("datauristring").split(",")[1];
+      window.AndroidApp.savePdf(b64, fileName);
+      return;
+    }
     doc.save(fileName);
     toast("PDF descargado", "ok");
   });
@@ -624,8 +630,18 @@
   // ---------------------------------------------------------------------------
   // Inicio
   // ---------------------------------------------------------------------------
+  // Botón "atrás" de Android: cierra ventanas abiertas o vuelve a la primera pestaña
+  window.__back = () => {
+    if (!$("scanner").hidden) { closeScanner(); return true; }
+    if (!$("confirm").hidden) { $("confirmNo").click(); return true; }
+    if (!$("photoView").hidden) { $("photoView").hidden = true; return true; }
+    if (currentView !== "registrar") { showView("registrar"); return true; }
+    return false;
+  };
+  window.__toast = toast;
+
   renderInventory();
-  if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  if (!window.AndroidApp && "serviceWorker" in navigator && location.protocol !== "file:") {
     window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
   }
 })();
