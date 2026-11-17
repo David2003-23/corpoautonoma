@@ -35,6 +35,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Contenedor nativo de la app de inventario. La interfaz es la misma app web
@@ -55,8 +57,15 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingWebPermission;
     private ValueCallback<Uri[]> fileCallback;
     private File pendingPhoto;
-    private byte[] pendingPdf;
-    private String pendingPdfName;
+    /** Archivos que la app web está escribiendo por partes (PDF y copias de seguridad). */
+    private final Map<String, OutFile> outFiles = new ConcurrentHashMap<String, OutFile>();
+    private OutFile pendingSave;
+
+    private static class OutFile {
+        String name, mime, action;
+        File tmp;
+        FileOutputStream out;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,6 +91,7 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new AssetClient());
         web.setWebChromeClient(new Chrome());
 
+        cleanOldFiles();
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else web.loadUrl(START_URL);
     }
@@ -223,65 +233,121 @@ public class MainActivity extends Activity {
             if (granted) launchCamera();
             else { toast("Se necesita permiso de cámara para tomar la foto"); finishFileChooser(null); }
         } else if (requestCode == REQ_PERM_STORAGE) {
-            if (granted && pendingPdf != null) savePdfNow(pendingPdf, pendingPdfName);
-            else toast("Se necesita permiso de almacenamiento para guardar el PDF");
-            pendingPdf = null;
-            pendingPdfName = null;
+            if (granted && pendingSave != null) finishFile(pendingSave);
+            else toast("Se necesita permiso de almacenamiento para guardar el archivo");
+            pendingSave = null;
         }
     }
 
-    // ---------------------------------------------------------------- PDF
+    // ------------------------------------------- archivos (PDF y copias)
     private class Bridge {
         @JavascriptInterface
-        public void savePdf(String base64, final String fileName) {
-            final byte[] bytes = Base64.decode(base64, Base64.DEFAULT);
+        public String fileBegin(String name, String mime) throws IOException {
+            OutFile f = new OutFile();
+            f.name = name.replaceAll("[\\\\/:*?\"<>|]", "_");
+            f.mime = mime;
+            f.tmp = new File(FilesProvider.dir(MainActivity.this), "tmp_" + UUID.randomUUID() + ".part");
+            f.out = new FileOutputStream(f.tmp);
+            String id = UUID.randomUUID().toString();
+            outFiles.put(id, f);
+            return id;
+        }
+
+        @JavascriptInterface
+        public void fileAppendText(String id, String text) throws IOException {
+            OutFile f = outFiles.get(id);
+            if (f != null) f.out.write(text.getBytes("UTF-8"));
+        }
+
+        @JavascriptInterface
+        public void fileAppendBase64(String id, String base64) throws IOException {
+            OutFile f = outFiles.get(id);
+            if (f != null) f.out.write(Base64.decode(base64, Base64.DEFAULT));
+        }
+
+        @JavascriptInterface
+        public void fileEnd(String id, String action) throws IOException {
+            final OutFile f = outFiles.remove(id);
+            if (f == null) return;
+            f.out.close();
+            f.action = action;
             runOnUiThread(new Runnable() {
                 @Override public void run() {
                     if (Build.VERSION.SDK_INT < 29
                             && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                        pendingPdf = bytes;
-                        pendingPdfName = fileName;
+                        pendingSave = f;
                         requestPermissions(new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE }, REQ_PERM_STORAGE);
                     } else {
-                        savePdfNow(bytes, fileName);
+                        finishFile(f);
                     }
                 }
             });
         }
     }
 
-    private void savePdfNow(byte[] bytes, String name) {
-        Uri viewUri;
+    /** Copia el archivo terminado a Descargas y luego lo abre o lo comparte. */
+    private void finishFile(OutFile f) {
+        Uri uri;
         try {
             if (Build.VERSION.SDK_INT >= 29) {
                 ContentValues v = new ContentValues();
-                v.put("_display_name", name);
-                v.put("mime_type", "application/pdf");
+                v.put("_display_name", f.name);
+                v.put("mime_type", f.mime);
                 v.put("relative_path", Environment.DIRECTORY_DOWNLOADS);
-                viewUri = getContentResolver().insert(Uri.parse("content://media/external/downloads"), v);
-                if (viewUri == null) throw new IOException("insert");
-                OutputStream os = getContentResolver().openOutputStream(viewUri);
-                os.write(bytes);
-                os.close();
+                uri = getContentResolver().insert(Uri.parse("content://media/external/downloads"), v);
+                if (uri == null) throw new IOException("insert");
+                OutputStream os = getContentResolver().openOutputStream(uri);
+                try { copy(f.tmp, os); } finally { os.close(); }
+                f.tmp.delete();
             } else {
                 File dl = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                 dl.mkdirs();
-                writeFile(new File(dl, name), bytes);
-                File copy = new File(FilesProvider.dir(this), name);
-                writeFile(copy, bytes);
-                viewUri = FilesProvider.uriFor(copy);
+                FileOutputStream os = new FileOutputStream(new File(dl, f.name));
+                try { copy(f.tmp, os); } finally { os.close(); }
+                File shared = new File(FilesProvider.dir(this), f.name);
+                shared.delete();
+                if (!f.tmp.renameTo(shared)) throw new IOException("rename");
+                uri = FilesProvider.uriFor(shared);
             }
         } catch (Exception e) {
-            toast("No se pudo guardar el PDF");
+            f.tmp.delete();
+            toast("No se pudo guardar el archivo");
             return;
         }
-        jsToast("PDF guardado en Descargas: " + name);
+        jsToast("Guardado en Descargas: " + f.name);
         try {
-            Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setDataAndType(viewUri, "application/pdf");
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(i, "Abrir PDF"));
-        } catch (Exception ignored) { /* sin visor de PDF: queda en Descargas */ }
+            Intent i;
+            if ("share".equals(f.action)) {
+                i = new Intent(Intent.ACTION_SEND);
+                i.setType(f.mime);
+                i.putExtra(Intent.EXTRA_STREAM, uri);
+                i.setClipData(android.content.ClipData.newRawUri(f.name, uri));
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(Intent.createChooser(i, "Guardar o enviar la copia"));
+            } else {
+                i = new Intent(Intent.ACTION_VIEW);
+                i.setDataAndType(uri, f.mime);
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(Intent.createChooser(i, "Abrir"));
+            }
+        } catch (Exception ignored) { /* sin app para abrir/compartir: queda en Descargas */ }
+    }
+
+    private static void copy(File from, OutputStream to) throws IOException {
+        java.io.FileInputStream in = new java.io.FileInputStream(from);
+        try {
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while ((n = in.read(buf)) > 0) to.write(buf, 0, n);
+        } finally { in.close(); }
+    }
+
+    /** Borra archivos temporales con más de un día. */
+    private void cleanOldFiles() {
+        File[] files = FilesProvider.dir(this).listFiles();
+        if (files == null) return;
+        long limit = System.currentTimeMillis() - 24L * 3600 * 1000;
+        for (File f : files) if (f.lastModified() < limit) f.delete();
     }
 
     private static void writeFile(File f, byte[] bytes) throws IOException {

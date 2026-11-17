@@ -41,6 +41,7 @@ public class FilesProvider extends ContentProvider {
     public String getType(Uri uri) {
         String n = uri.getLastPathSegment();
         if (n != null && n.endsWith(".pdf")) return "application/pdf";
+        if (n != null && n.endsWith(".json")) return "application/json";
         return "image/jpeg";
     }
 

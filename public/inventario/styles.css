@@ -268,3 +268,55 @@ img.thumb { cursor: zoom-in; }
   .grid-2 { grid-template-columns: 1fr; }
   .grand-total strong { font-size: 1.25rem; }
 }
+
+/* ---------- Selector segmentado (U / Kg) ---------- */
+.seg { display: flex; gap: 4px; padding: 4px; background: var(--green-50); border-radius: 12px; }
+.seg label { flex: 1; position: relative; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span {
+  display: block; text-align: center; padding: 9px 6px; border-radius: 9px;
+  font-weight: 600; color: var(--muted); cursor: pointer; transition: background .15s, color .15s;
+}
+.seg input:checked + span { background: #fff; color: var(--green-600); box-shadow: 0 1px 4px rgba(63, 110, 87, .15); }
+.seg input:focus-visible + span { outline: 2px solid var(--green); }
+
+.unit-btn {
+  border: 0; border-radius: 99px; background: var(--green-100); color: var(--green-600);
+  font: inherit; font-size: .8rem; font-weight: 700; padding: 3px 10px; cursor: pointer; margin-left: 6px;
+}
+.qty-wrap { display: flex; align-items: center; }
+.qty-wrap input { min-width: 0; }
+
+/* ---------- Sugerencias de búsqueda por nombre ---------- */
+.suggest-wrap { position: relative; }
+.suggest {
+  position: absolute; left: 0; right: 56px; top: calc(100% + 6px); z-index: 7;
+  list-style: none; margin: 0; padding: 4px;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(47, 62, 55, .14); max-height: 300px; overflow: auto;
+}
+.suggest button {
+  width: 100%; text-align: left; background: none; border: 0; font: inherit; color: var(--ink);
+  padding: 9px 10px; border-radius: 9px; cursor: pointer; display: grid; gap: 1px;
+}
+.suggest button:hover, .suggest button:focus { background: var(--green-50); outline: none; }
+.suggest .s-name { font-weight: 600; }
+.suggest mark { background: var(--green-100); color: inherit; border-radius: 3px; }
+.suggest .s-empty { padding: 10px; color: var(--muted); font-size: .9rem; }
+
+/* ---------- Datos y respaldo ---------- */
+.card-title { margin: 0; font-size: 1.02rem; }
+.text { margin: -4px 0 0; color: var(--muted); font-size: .92rem; }
+.kv.wide { margin-top: 0; }
+.meter { display: flex; height: 10px; border-radius: 99px; overflow: hidden; background: var(--green-50); }
+.meter div { height: 100%; transition: width .3s; }
+#meterPhotos { background: var(--green); }
+#meterData { background: #b9d9c8; }
+.banner.warn { background: #fdf5e6; color: #a07a2c; font-weight: 500; font-size: .9rem; }
+.progress { height: 8px; border-radius: 99px; background: var(--green-50); overflow: hidden; }
+.progress div { height: 100%; width: 0; background: var(--green); transition: width .2s; }
+.more { margin-top: 10px; }
+
+@media (max-width: 380px) {
+  .tab { font-size: .7rem; }
+}

@@ -1,5 +1,5 @@
 // Service worker: permite usar la app sin conexión.
-const CACHE = "inventario-v1";
+const CACHE = "inventario-v2";
 const ASSETS = [
   "./",
   "./index.html",
